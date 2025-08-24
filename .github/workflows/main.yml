@@ -1,0 +1,67 @@
+# .github/workflows/build.yml
+
+name: Build Android Kernel
+
+# Controls when the action will run.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-22.04
+
+    steps:
+      # 1. Checkout your kernel source repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Install all dependencies required for kernel compilation
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential bc bison flex libssl-dev libncurses-dev \
+            libelf-dev gcc g++ make python3 python-is-python3 cpio kmod \
+            clang lld zip curl wget device-tree-compiler lz4 xz-utils \
+            zlib1g-dev libarchive-tools zstd
+
+      # 3. Run the self-contained build script
+      #    Our script handles its own environment (PATH, ARCH, etc.)
+      #    and will automatically download the toolchain on the runner.
+      - name: Build Kernel
+        run: |
+          chmod +x ./build_kernel.sh
+          ./build_kernel.sh
+
+      # 4. Package the kernel into a flashable AnyKernel3 zip
+      - name: Package into Flashable Zip
+        run: |
+          # Clone the AnyKernel3 template
+          git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+          
+          # Copy the compiled kernel image into the AnyKernel3 directory
+          cp arch/arm64/boot/Image AnyKernel3/
+          
+          # Find and copy the device tree blobs (DTB/DTBO)
+          # Note: The path to dtb and dtbo might vary. This find command is robust.
+          find arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} AnyKernel3/dtb \;
+          find arch/arm64/boot/ -name "dtbo.img" -exec cp {} AnyKernel3/dtbo.img \;
+
+          # Create the zip file
+          cd AnyKernel3
+          zip -r9 ../Kernel-$(date +%Y-%m-%d).zip .
+          cd ..
+
+      # 5. Upload the final flashable zip as a build artifact
+      - name: Upload Flashable Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flashable-Kernel-Zip
+          path: ./*.zip
+          if-no-files-found: error
