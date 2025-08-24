@@ -20,7 +20,8 @@ jobs:
       # 1. Checkout your kernel source repository
       - name: Checkout Repository
         uses: actions/checkout@v4
-
+        with:
+          persist-credentials: false
       # 2. Install all dependencies required for kernel compilation
       - name: Install Dependencies
         run: |
